@@ -136,6 +136,7 @@
         <p id="invInfo" class="info"></p>
         <div class="result-actions">
           <button id="countTheseBtn" class="btn" hidden>Request a count of these</button>
+          <button id="printPalletsBtn" class="btn">Print barcodes</button>
           <button id="exportBtn" class="btn red-outline">Export to Excel</button>
         </div>
       </div>
@@ -151,6 +152,7 @@
     <section class="panel" id="tab-items" hidden>
       <div class="toolbar">
         <input id="itemFilter" type="search" placeholder="Filter by item # or description">
+        <button id="itemPrintBtn" class="btn">Print item barcodes</button>
         <button id="itemExportBtn" class="btn red-outline">Export to Excel</button>
       </div>
       <p id="itemInfo" class="info"></p>
@@ -214,7 +216,8 @@
             <button class="seg-btn" data-which="closed">Completed</button>
             <button class="seg-btn" data-which="schedules">Schedules</button>
           </div>
-          <button id="ccNewBtn" class="btn primary">Request a count</button>
+          <div class="cc-actions"><button id="ccBayLabelsBtn" class="btn">Print bay barcodes</button>
+          <button id="ccNewBtn" class="btn primary">Request a count</button></div>
         </div>
         <p id="ccInfo" class="info"></p>
         <div id="ccList" class="cc-list"></div>
@@ -236,10 +239,13 @@
 </div>
 
 <div id="toast" class="toast" hidden role="status"></div>
+<div id="printArea" aria-hidden="true"></div>
 <div id="busy" class="busy" hidden><div class="spinner"></div><span id="busyText">Loading</span></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
 <script src="app.js"></script>
 <script src="counts.js"></script>
+<script src="print.js"></script>
 </body>
 </html>

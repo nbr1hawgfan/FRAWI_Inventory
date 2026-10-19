@@ -1,6 +1,6 @@
 /* Caches the app shell only. Inventory and count data always come live from the server. */
-const CACHE = "cust-app-v2.0";
-const SHELL = ["./", "index.html", "styles.css", "app.js", "counts.js", "config.js", "manifest.json",
+const CACHE = "cust-app-v2.1";
+const SHELL = ["./", "index.html", "styles.css", "app.js", "counts.js", "print.js", "config.js", "manifest.json",
                "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

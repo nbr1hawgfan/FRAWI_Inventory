@@ -243,6 +243,7 @@
         ${c.notes ? `<div class="cc-meta"><span>Notes: ${esc(c.notes)}</span></div>` : ""}
       </div>
       <div class="cc-actions">
+        ${c.status === "in_progress" && d.can_count && d.lines.some((l) => l.expected) ? '<button class="btn" id="ccPrint">Print count sheets</button>' : ""}
         ${d.full ? '<button class="btn red-outline" id="ccExport">Export to Excel</button>' : ""}
         ${canCancel ? '<button class="btn" id="ccCancel">Cancel count</button>' : ""}
       </div></div>`;
@@ -314,7 +315,7 @@
       <p class="muted">Counts are blind: scan each pallet and enter what you see. You will not see the expected quantity.</p>
       <div class="bay-grid">${bays.map((b) => `<button class="bay-btn ${b.done ? "done" : b.counted || b.extra ? "started" : ""}" data-bay="${esc(b.bay)}">
           <strong>${esc(b.bay)}</strong><small>${b.done ? "Finished" : `${num(b.counted)} of ${num(b.total)}`}${b.extra ? ` &middot; +${b.extra} extra` : ""}</small></button>`).join("")}</div>
-      <div class="other-bay"><span>Counting a bay not listed?</span><input id="ccOtherBay" type="text" maxlength="30" placeholder="Bay"><button class="btn" id="ccOtherGo">Go</button></div>
+      <div class="other-bay"><span>Scan a bay label, or type a bay not listed:</span><input id="ccOtherBay" type="text" maxlength="30" placeholder="Scan or type bay"><button class="btn" id="ccOtherGo">Go</button></div>
       <div class="cc-actions" style="margin-top:20px"><button class="btn dark" id="ccSubmit">Finish and send for review</button></div>`;
   }
 
@@ -352,10 +353,24 @@
       <div class="cc-actions" style="margin-top:14px"><button class="btn dark" id="ccBayDone">This bay is finished</button></div>`;
   }
 
+  /* A scanned bay label in the tag box moves the counter to that bay (unless it is also a pallet tag). */
+  function switchBayFromScan(raw) {
+    const v = String(raw || "").trim().toUpperCase();
+    if (!v || v === CS.bay) return false;
+    const lines = CS.detail.lines;
+    if (lines.some((l) => [l.lwh_id, l.customer_id, l.tag].some((t) => t && String(t).toUpperCase() === v))) return false;
+    const known = new Set(lines.filter((l) => l.expected).map((l) => (l.bay || "").toUpperCase()));
+    (A.S.dash.bays || []).forEach((b) => known.add(b.bay.toUpperCase()));
+    if (!known.has(v)) return false;
+    stopCam(); CS.bay = v; renderDetail(); toast(`Now counting bay ${v}.`);
+    return true;
+  }
+
   async function saveScan() {
     const tag = $("ccTag").value.trim(), qty = $("ccQty").value.trim();
     const fb = $("ccFeedback");
     if (!tag) { $("ccTag").focus(); return; }
+    if (switchBayFromScan(tag)) return;
     if (qty === "") { $("ccQty").focus(); fb.hidden = false; fb.className = "feedback err"; fb.textContent = "Enter the quantity on the pallet."; return; }
     $("ccSave").disabled = true;
     try {
@@ -475,6 +490,7 @@
     const id = CS.detail.count.id;
     on("ccBack", backToList);
     on("ccExport", exportCount);
+    on("ccPrint", () => window.Sheets.countSheets(CS.detail));
     on("ccCancel", async () => {
       if (!(await confirmBox("Cancel this count?", "<p>The count stays in the history as cancelled.</p>", "Cancel count", "primary"))) return;
       busy(true); try { await api("cc_cancel", { id }); toast("Count cancelled."); backToList(); } catch (e) { fail(e); } finally { busy(false); }
@@ -502,7 +518,12 @@
     on("ccCam", startCam);
     const tag = document.getElementById("ccTag");
     if (tag) {
-      tag.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); if ($("ccQty").value.trim() !== "" && $("ccKeep").checked) saveScan(); else $("ccQty").focus(); } };
+      tag.onkeydown = (e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        if (switchBayFromScan(tag.value)) return;
+        if ($("ccQty").value.trim() !== "" && $("ccKeep").checked) saveScan(); else $("ccQty").focus();
+      };
       $("ccQty").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); saveScan(); } };
       $("ccKeep").onchange = () => (CS.keepQty = $("ccKeep").checked);
       setTimeout(() => tag.focus(), 30);
@@ -633,6 +654,7 @@
   /* ================= wiring ================= */
   document.querySelectorAll("#ccSeg .seg-btn").forEach((b) => (b.onclick = () => loadList(b.dataset.which)));
   $("ccNewBtn").onclick = () => request();
+  $("ccBayLabelsBtn").onclick = () => window.Sheets.baysDialog();
   $("ccList").addEventListener("click", (e) => { const b = e.target.closest(".cc-card[data-id]"); if (b) openDetail(+b.dataset.id); });
 
   window.Counts = {

@@ -11,6 +11,21 @@ One Source and Trane apps, with the time, temperature and today's forecast in th
 - **Transactions**: loads and pallets in/out, by-shipper rollup, up to 92 days (same as Trane).
 - **Cycle Counts**: request, count, review and results, plus weekly/monthly schedules.
 
+## Barcode sheets (print or Save as PDF)
+All barcodes are Code 128 and print from the browser's print dialog. Choose "Save as PDF" to keep a file.
+| Where | Button | Sheet |
+|---|---|---|
+| Cycle Counts | Print bay barcodes | **Bay labels** (2 per page, large bay name for the racks), **bay list** (30 per page), or **bays with their pallets** (each pallet's LWH ID and Customer ID barcodes) |
+| Items | Print item barcodes | item # barcode, description, pallets, qty, bays (follows the filter box) |
+| Inventory | Print barcodes | the pallets in the current search, with LWH ID and Customer ID barcodes |
+| A count that is underway | Print count sheets | cover page plus one page per bay: bay barcode, every expected pallet with barcodes, blank "qty counted" and notes boxes, a "found here, not listed" area and a sign-off line. **Blind**: no expected quantities. |
+
+**Scanning a bay label while counting** jumps the counter to that bay. Scan it in the "Scan a bay label" box on the bay list,
+or straight into the tag box while counting another bay. Bay labels encode the plain bay name, the same as the WMS uses.
+
+The Customer ID column, barcodes and search hints only appear once a customer has Customer IDs on file
+(Trane from January, when their labels start going into the WMS Comments field at receiving).
+
 ## Smart search
 | Type this | You get |
 |---|---|
@@ -86,9 +101,6 @@ Two inactive users named "Claude test ... (temp)" were left from setup; they can
   `cust_app_customers` and `title` / `shortTitle` / `fileBase` in `config.js` if they go by another name.
 - **WHSE11** has no friendly name yet, so it shows as "WHSE11". Add a row to `cust_app_locations` (code, name, short_name, sort_order).
 
-## Turning cycle counts on for Trane (TRAFO) later
-1. `update cust_app_customers set features = '{"cycle_counts": true}' where code = 'TRAFO';`
-2. Either copy this repo for Trane (change `config.js` and `manifest.json`), or point the Trane app's `config.js`
-   `api` at `.../functions/v1/customer-app` and swap in this repo's `index.html`, `app.js`, `counts.js`, `styles.css`, `sw.js`.
-3. Add their LWH counter PINs with `cust_app_add_user_role(..., 'lwh')`.
-At about 11,300 pallets and 987 bays, a weekly rotation over 8 to 12 runs is a more realistic size per count for Trane.
+## Same app for Trane
+The Trane app (TRAFO_Inventory) runs this same code with its own `config.js`. Cycle counts are turned on for TRAFO in Supabase.
+When you change shared code, copy `index.html`, `app.js`, `counts.js`, `print.js`, `styles.css` and `sw.js` to both repos.

@@ -161,6 +161,10 @@
     $("tItems").textContent = num(d.total_items);
     $("tBays").textContent = num(d.total_bays);
     if (d.as_of) $("asOf").textContent = "Inventory updated " + fmtStamp(d.as_of);
+    if (d.has_customer_ids === false) {   // no customer tags yet: don't advertise searching by them
+      $("dq").placeholder = "Item #, description, LWH ID, bay, receipt...";
+      $("txQ").placeholder = "Find in these transactions: item #, bill-to ref, INV receipt, LWH ID, shipper";
+    }
 
     const maxAge = Math.max(1, ...d.aging.map((a) => a.pallets));
     $("dashAging").innerHTML = d.aging.map((a, i) => `<div class="hbar${i >= 3 ? " old" : ""}" title="${num(a.qty)} qty">
@@ -246,7 +250,11 @@
   }
 
   /* ---------- inventory (smart search) ---------- */
-  function columns() { return S.dash.customer.columns; }
+  /* Customer ID only shows once this customer's own tags are in the WMS (Trane from January). */
+  function columns() {
+    const hasCust = S.dash.has_customer_ids !== false;
+    return S.dash.customer.columns.filter((c) => c.key !== "customer_id" || hasCust);
+  }
 
   function cell(key, row) {
     const v = row[key];
@@ -272,7 +280,7 @@
         : `<tr><td class="empty" colspan="${cols.length + 1}">Nothing matches "${esc(S.query)}". Try fewer words, part of a number, or the search tips above.</td></tr>`;
       const nf = r.not_found || [];
       $("notFound").hidden = !nf.length;
-      if (nf.length) $("notFound").innerHTML = `<span><strong>${plural(nf.length, "entry")} not found</strong> in current inventory: ${esc(nf.slice(0, 40).join(", "))}${nf.length > 40 ? " ..." : ""}</span>`;
+      if (nf.length) $("notFound").innerHTML = `<span><strong>${nf.length === 1 ? "1 entry" : num(nf.length) + " entries"} not found</strong> in current inventory: ${esc(nf.slice(0, 40).join(", "))}${nf.length > 40 ? " ..." : ""}</span>`;
       const extra = r.mode === "bulk" ? " from your list" : "";
       $("invInfo").textContent = S.query
         ? `${plural(r.total, "pallet")} found${extra} (qty ${num(r.qty)})`
@@ -342,6 +350,8 @@
   const PALLET_COLS = [["date", "Date"], ["direction", "Direction"], ["inv_receipt", "INV Receipt"], ["bill_to_ref", "Bill-To Ref"],
     ["lwh_id", "LWH ID"], ["customer_id", "Customer ID"], ["item_number", "Item #"], ["item_description", "Item Description"],
     ["qty", "Qty"], ["location", "Warehouse"]];
+
+  const palletCols = () => (S.dash && S.dash.has_customer_ids === false ? PALLET_COLS.filter(([k]) => k !== "customer_id") : PALLET_COLS);
 
   const OPEN_LABEL = "Not closed out yet";
   const partyOf = (l) => (l.direction === "Inbound" ? l.shipper : l.consignee) || (l.status === "Open" ? OPEN_LABEL : "Not recorded");
@@ -417,7 +427,7 @@
       return;
     }
 
-    const loads = S.txView === "loads", cols = loads ? LOAD_COLS : PALLET_COLS, rows = loads ? data.loads : data.pallets;
+    const loads = S.txView === "loads", cols = loads ? LOAD_COLS : palletCols(), rows = loads ? data.loads : data.pallets;
     $("txTable").querySelector("thead").innerHTML = "<tr>" + cols.map(([k, l]) => `<th${NUM_KEYS.has(k) ? ' class="r"' : ""}>${l}</th>`).join("") + "</tr>";
     $("txTable").querySelector("tbody").innerHTML = rows.length ? rows.map((r) => "<tr>" + cols.map(([k]) => {
       if (k === "direction") return `<td><span class="dir ${esc(r[k])}">${esc(r[k])}</span></td>`;
@@ -485,7 +495,7 @@
     const data = filtered(), wb = XLSX.utils.book_new();
     if (!keep) XLSX.utils.book_append_sheet(wb, sheet(PARTY_COLS, partners()), "By Shipper");
     XLSX.utils.book_append_sheet(wb, sheet(LOAD_COLS, data.loads), "Loads");
-    XLSX.utils.book_append_sheet(wb, sheet(PALLET_COLS, data.pallets), "Pallets");
+    XLSX.utils.book_append_sheet(wb, sheet(palletCols(), data.pallets), "Pallets");
     const tag = [keep ? keep.party : "", $("txQ").value.trim()].filter(Boolean).join(" ");
     const who = tag ? " " + tag.replace(/[^\w\- ]/g, "").slice(0, 40) : "";
     XLSX.writeFile(wb, `${C.fileBase} Transactions${who} ${t.from} to ${t.to}.xlsx`);
@@ -549,6 +559,11 @@
   $("nextBtn").onclick = () => search(S.page + 1);
   $("exportBtn").onclick = exportInventory;
   $("countTheseBtn").onclick = countThese;
+  $("printPalletsBtn").onclick = () => window.Sheets.pallets($("q").value.trim(), $("loc").value || "ALL");
+  $("itemPrintBtn").onclick = () => {
+    const f = $("itemFilter").value.trim();
+    window.Sheets.items(S.itemRows || S.dash.items, f ? `items matching "${f}"` : null);
+  };
 
   // items
   $("itemFilter").addEventListener("input", renderItems);
