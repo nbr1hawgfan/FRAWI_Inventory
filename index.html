@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#C41230">
+<meta name="robots" content="noindex, nofollow">
+<title>Inventory</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="config.js"></script>
+</head>
+<body>
+
+<!-- Sign in -->
+<main id="login" class="login" hidden>
+  <div class="login-card">
+    <div class="badge big">LWH</div>
+    <h1 id="loginTitle">Inventory</h1>
+    <p class="muted">Logistics Warehouse, Inc. &middot; Fort Smith, AR</p>
+    <label for="pin">Enter your PIN</label>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8" placeholder="6 to 8 digits">
+    <button id="loginBtn" class="btn primary wide">Sign in</button>
+    <p id="loginMsg" class="msg" role="alert"></p>
+  </div>
+</main>
+
+<!-- App -->
+<div id="app" hidden>
+  <header class="masthead">
+    <div class="mast-red">
+      <div class="badge">LWH</div>
+      <div class="mast-text">
+        <h1 id="appTitle">Inventory</h1>
+        <p id="asOf" class="as-of">Logistics Warehouse, Inc.</p>
+      </div>
+    </div>
+    <div class="mast-black">
+      <div class="wx" id="wx" aria-live="polite">
+        <span id="wxTime" class="wx-time"></span>
+        <span id="wxNow" class="wx-now"></span>
+        <span id="wxDay" class="wx-day"></span>
+      </div>
+      <div class="who">
+        <span id="userName"></span><span id="roleTag" class="role-tag" hidden>LWH</span>
+        <button id="logoutBtn" class="link-btn">Sign out</button>
+      </div>
+    </div>
+  </header>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="dashboard" role="tab">Dashboard</button>
+    <button class="tab" data-tab="inventory" role="tab">Inventory</button>
+    <button class="tab" data-tab="items" role="tab">Items</button>
+    <button class="tab" data-tab="transactions" role="tab">Transactions</button>
+    <button class="tab" data-tab="counts" role="tab" id="countsTab" hidden>Cycle Counts <span id="countsBadge" class="tab-badge" hidden></span></button>
+  </nav>
+
+  <div class="page">
+
+    <!-- ============ Dashboard ============ -->
+    <section class="panel" id="tab-dashboard">
+      <div class="hero-search">
+        <label for="dq" class="hero-label">Find anything</label>
+        <div class="suggest-wrap">
+          <input id="dq" type="search" autocomplete="off" placeholder="Item #, description, LWH ID, Customer ID, bay, receipt...">
+          <div id="dqSuggest" class="suggest" hidden></div>
+        </div>
+        <button id="dqBtn" class="btn primary">Search</button>
+      </div>
+      <p class="tips">Paste a list of IDs to look them all up at once. Try <code>bay:E0*</code>, <code>age&gt;180</code>, or "quotes" to keep an item number together.</p>
+
+      <section class="totals" id="totals">
+        <div><span class="num" id="tPallets">-</span><span class="lbl">Pallets on hand</span></div>
+        <div><span class="num" id="tQty">-</span><span class="lbl">Total quantity</span></div>
+        <div><span class="num" id="tItems">-</span><span class="lbl">Item numbers</span></div>
+        <div><span class="num" id="tBays">-</span><span class="lbl">Bays in use</span></div>
+      </section>
+
+      <div class="cards">
+        <article class="card" id="cardCounts" hidden>
+          <h2>Cycle counts</h2>
+          <div id="dashCounts"></div>
+        </article>
+        <article class="card">
+          <h2>Inventory age</h2>
+          <div id="dashAging" class="hbars"></div>
+        </article>
+        <article class="card">
+          <h2>Last 14 days</h2>
+          <div id="dashActivity"></div>
+        </article>
+        <article class="card wide">
+          <div class="card-head">
+            <h2>Top items by pallets</h2>
+            <button class="btn small" data-goto="items">All items</button>
+          </div>
+          <div class="table-wrap short"><table id="dashTop"><thead><tr>
+            <th>Item #</th><th>Description</th><th class="r">Pallets</th><th class="r">Qty</th><th class="r">Bays</th><th class="r">Oldest (days)</th>
+          </tr></thead><tbody></tbody></table></div>
+        </article>
+        <article class="card wide" id="cardLocs" hidden>
+          <h2>By warehouse</h2>
+          <div id="dashLocs" class="hbars"></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ Inventory ============ -->
+    <section class="panel" id="tab-inventory" hidden>
+      <div class="toolbar">
+        <div class="suggest-wrap grow">
+          <textarea id="q" rows="1" autocomplete="off" placeholder="Search, or paste a list of IDs, item numbers or bays"></textarea>
+          <div id="qSuggest" class="suggest" hidden></div>
+        </div>
+        <select id="loc" aria-label="Warehouse"><option value="ALL">All warehouses</option></select>
+        <button id="searchBtn" class="btn primary">Search</button>
+        <button id="clearBtn" class="btn">Clear</button>
+      </div>
+      <details class="help">
+        <summary>Search tips</summary>
+        <ul>
+          <li><strong>Several words</strong> must all match: <code>volute 12x8</code></li>
+          <li><strong>Paste a list</strong> of LWH IDs, Customer IDs, INV receipts, item numbers or bays (one per line, or separated by spaces or commas). Anything not found is listed.</li>
+          <li><strong>Field filters:</strong> <code>item:</code> <code>bay:</code> <code>id:</code> (LWH ID) <code>cust:</code> (Customer ID) <code>rcv:</code> (INV receipt) <code>ref:</code> <code>lot:</code> <code>desc:</code></li>
+          <li><strong>Wildcards:</strong> <code>bay:E0*</code> finds bays E01 to E09. <strong>Age:</strong> <code>age&gt;180</code> or <code>age&lt;30</code> (days)</li>
+          <li><strong>Quotes</strong> keep an item number with spaces together: <code>"SPHFGS6 000 X"</code></li>
+        </ul>
+      </details>
+      <div id="notFound" class="filter-bar warn" hidden></div>
+      <div class="result-bar">
+        <p id="invInfo" class="info"></p>
+        <div class="result-actions">
+          <button id="countTheseBtn" class="btn" hidden>Request a count of these</button>
+          <button id="exportBtn" class="btn red-outline">Export to Excel</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table id="invTable"><thead></thead><tbody></tbody></table></div>
+      <div class="pager">
+        <button id="prevBtn" class="btn">Previous</button>
+        <span id="pageInfo"></span>
+        <button id="nextBtn" class="btn">Next</button>
+      </div>
+    </section>
+
+    <!-- ============ Items ============ -->
+    <section class="panel" id="tab-items" hidden>
+      <div class="toolbar">
+        <input id="itemFilter" type="search" placeholder="Filter by item # or description">
+        <button id="itemExportBtn" class="btn red-outline">Export to Excel</button>
+      </div>
+      <p id="itemInfo" class="info"></p>
+      <div class="table-wrap"><table id="itemTable">
+        <thead><tr>
+          <th data-sort="item_number">Item #</th>
+          <th data-sort="description">Item Description</th>
+          <th data-sort="pallets" class="r">Pallets</th>
+          <th data-sort="qty" class="r">Qty</th>
+          <th data-sort="bays" class="r">Bays</th>
+          <th data-sort="oldest">Oldest Received</th>
+          <th data-sort="max_age" class="r">Oldest Age (Days)</th>
+          <th></th>
+        </tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <!-- ============ Transactions ============ -->
+    <section class="panel" id="tab-transactions" hidden>
+      <div class="toolbar">
+        <label class="inline">From <input id="txFrom" type="date"></label>
+        <label class="inline">To <input id="txTo" type="date"></label>
+        <select id="txDir" aria-label="Direction">
+          <option value="ALL">Inbound and outbound</option>
+          <option value="Inbound">Inbound only</option>
+          <option value="Outbound">Outbound only</option>
+        </select>
+        <button id="txBtn" class="btn primary">Show</button>
+        <button id="txExportBtn" class="btn red-outline">Export to Excel</button>
+      </div>
+      <div class="quick">
+        <button class="chip" data-days="0">Today</button>
+        <button class="chip" data-days="1">Yesterday</button>
+        <button class="chip" data-days="7">Last 7 days</button>
+        <button class="chip" data-days="30">Last 30 days</button>
+        <button class="chip" data-days="90">Last 90 days</button>
+      </div>
+      <p class="info small-note">Up to 92 days per search.</p>
+      <div class="tx-totals" id="txTotals"></div>
+      <div class="tx-search">
+        <input id="txQ" type="search" placeholder="Find in these transactions: item #, bill-to ref, INV receipt, LWH ID, Customer ID, shipper" aria-label="Find in transactions">
+      </div>
+      <div class="seg" id="txSeg">
+        <button class="seg-btn active" data-view="loads">Loads</button>
+        <button class="seg-btn" data-view="pallets">Pallets</button>
+        <button class="seg-btn" data-view="partners">By shipper</button>
+      </div>
+      <div id="txFilter" class="filter-bar" hidden>
+        <span id="txFilterText"></span>
+        <button id="txFilterClear" class="btn small">Clear filter</button>
+      </div>
+      <p id="txInfo" class="info"></p>
+      <div class="table-wrap"><table id="txTable"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+    <!-- ============ Cycle counts ============ -->
+    <section class="panel" id="tab-counts" hidden>
+      <div id="ccListView">
+        <div class="cc-top">
+          <div class="seg" id="ccSeg">
+            <button class="seg-btn active" data-which="open">Open</button>
+            <button class="seg-btn" data-which="closed">Completed</button>
+            <button class="seg-btn" data-which="schedules">Schedules</button>
+          </div>
+          <button id="ccNewBtn" class="btn primary">Request a count</button>
+        </div>
+        <p id="ccInfo" class="info"></p>
+        <div id="ccList" class="cc-list"></div>
+        <div id="ccSchedules" hidden></div>
+      </div>
+      <div id="ccDetail" hidden></div>
+    </section>
+  </div>
+  <footer class="foot">Logistics Warehouse, Inc. &middot; Questions about your inventory? Contact your LWH representative.</footer>
+</div>
+
+<!-- Dialog (count requests, schedules, confirmations) -->
+<div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-card">
+    <div class="modal-head"><h2 id="modalTitle"></h2><button id="modalClose" class="x-btn" aria-label="Close">&times;</button></div>
+    <div id="modalBody" class="modal-body"></div>
+    <div id="modalFoot" class="modal-foot"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden role="status"></div>
+<div id="busy" class="busy" hidden><div class="spinner"></div><span id="busyText">Loading</span></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="app.js"></script>
+<script src="counts.js"></script>
+</body>
+</html>
