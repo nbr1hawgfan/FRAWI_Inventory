@@ -87,21 +87,22 @@
   }
 
   const showCust = () => !(A.S.dash && A.S.dash.has_customer_ids === false);
-  function palletRows(rows, blind) {
+  function palletRows(rows, blind, check) {
     return rows.map((p) => `<tr>
         <td>${bc(p.lwh_id || p.tag || "", "small")}<div class="ps-id">${esc(p.lwh_id || p.tag || "")}</div></td>
         ${showCust() ? `<td>${p.customer_id ? `${bc(p.customer_id, "small")}<div class="ps-id">${esc(p.customer_id)}</div>` : ""}</td>` : ""}
         <td><div class="ps-item">${esc(p.item_number || "")}</div><div class="ps-desc">${p.item_description && p.item_description !== p.item_number ? esc(p.item_description) : ""}</div></td>
-        ${blind ? '<td class="ps-write"></td><td class="ps-write wide"></td>' : `<td class="r">${num(p.qty)}</td>`}</tr>`).join("");
+        ${check ? '<td class="ps-check"><span></span></td><td class="ps-write"></td><td class="ps-write wide"></td>'
+          : blind ? '<td class="ps-write"></td><td class="ps-write wide"></td>' : `<td class="r">${num(p.qty)}</td>`}</tr>`).join("");
   }
-  function palletPage(title, bay, rows, blind, sub) {
+  function palletPage(title, bay, rows, blind, sub, check) {
     const pages = chunk(rows.length ? rows : [null], 9);   // 9 pallets fit a page with two barcodes each
     return pages.map((pg, i) => `<section class="ps-page">
         ${header(title, (sub ? sub + " · " : "") + (pages.length > 1 ? `page ${i + 1} of ${pages.length}` : plural(rows.length, "pallet")))}
         ${bay ? `<div class="ps-bayline"><span>Bay <strong>${esc(bay)}</strong></span>${bc(bay)}</div>` : ""}
-        ${pg[0] ? `<table class="ps-table"><thead><tr><th>LWH ID</th>${showCust() ? "<th>Customer ID</th>" : ""}<th>Item</th>${blind ? "<th>Qty counted</th><th>Notes</th>" : '<th class="r">Qty</th>'}</tr></thead>
-          <tbody>${palletRows(pg, blind)}</tbody></table>` : '<p class="ps-empty">No pallets in this bay.</p>'}
-        ${blind ? `<div class="ps-found"><strong>Found here, not listed above</strong> (tag and qty):<div class="ps-lines"></div></div>
+        ${pg[0] ? `<table class="ps-table"><thead><tr><th>LWH ID</th>${showCust() ? "<th>Customer ID</th>" : ""}<th>Item</th>${check ? "<th>Found</th><th>Found in bay</th><th>Notes</th>" : blind ? "<th>Qty counted</th><th>Notes</th>" : '<th class="r">Qty</th>'}</tr></thead>
+          <tbody>${palletRows(pg, blind, check)}</tbody></table>` : '<p class="ps-empty">No pallets in this bay.</p>'}
+        ${blind ? `<div class="ps-found"><strong>Found here, not listed above</strong> (tag${check ? "" : " and qty"}):<div class="ps-lines"></div></div>
           <div class="ps-sign">Counted by ____________________ &nbsp; Date ___________ &nbsp; Time ________</div>` : ""}
       </section>`).join("");
   }
@@ -133,7 +134,7 @@
   /* ---------- cycle count sheets (blind: no expected qty) ---------- */
   function countSheets(detail) {
     if (!ready()) return;
-    const c = detail.count;
+    const c = detail.count, check = !(c.scope && c.scope.count_qty);
     const lines = detail.lines.filter((l) => l.expected);
     if (!lines.length) return toast("Start the count first. The pallet list is set when counting starts.");
     const by = {}; lines.forEach((l) => (by[l.bay || "Not Assigned"] = by[l.bay || "Not Assigned"] || []).push(l));
@@ -145,12 +146,13 @@
           <tr><th>Started</th><td>${esc(c.started_by || "")} ${fmtStamp(c.started_at)}</td></tr>
           <tr><th>Pallets</th><td>${plural(lines.length, "pallet")} in ${plural(bays.length, "bay")}</td></tr>
         </tbody></table>
-        <p>Count every pallet in each bay. Write the quantity you see; expected quantities are not shown on purpose.
+        <p>${check ? "Check every pallet in each bay: tick Found for each one that is there, and write the bay if you find it somewhere else."
+            : "Count every pallet in each bay. Write the quantity you see; expected quantities are not shown on purpose."}
            List anything you find that is not printed for that bay. Enter results in the app afterwards
            (Cycle Counts &gt; #${c.id}), or hand the sheets to the office.</p>
         <table class="ps-table"><thead><tr><th>Bay</th><th class="r">Pallets</th><th>Done</th></tr></thead>
           <tbody>${bays.map((b) => `<tr><td>${esc(b)}</td><td class="r">${num(by[b].length)}</td><td class="ps-write"></td></tr>`).join("")}</tbody></table></section>`;
-    print(cover + bays.map((b) => palletPage(`Count #${c.id}: bay ${b}`, b, by[b], true, c.title)).join(""), `Count ${c.id} Sheets`);
+    print(cover + bays.map((b) => palletPage(`Count #${c.id}: bay ${b}`, b, by[b], true, c.title, check)).join(""), `Count ${c.id} Sheets`);
   }
 
   window.Sheets = { baysDialog, items, pallets, countSheets };

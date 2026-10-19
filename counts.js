@@ -12,7 +12,10 @@
                    missing: "Missing", extra: "Not on list", unknown: "Unknown tag" };
   const WEEKDAYS = ["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const pill = (status, overdue) => `<span class="pill ${status}">${STATUS[status] || status}</span>${overdue ? ' <span class="pill overdue">Overdue</span>' : ""}`;
-  const res = (r) => `<span class="res ${r}">${RESULT[r] || r}</span>`;
+  const qtyMode = (c) => !!(c && c.scope && c.scope.count_qty);
+  const PALLET_LABEL = { match: "Found", counted: "Found", pending: "Not scanned yet" };
+  const resLabel = (r, c) => (!qtyMode(c) && PALLET_LABEL[r]) || RESULT[r] || r;
+  const res = (r, c) => `<span class="res ${r}">${resLabel(r, c || (CS.detail && CS.detail.count))}</span>`;
   const pct = (v) => (v === null || v === undefined ? "-" : `${Number(v).toFixed(1)}%`);
   const performerText = (c) => (c.performer === "customer" ? (isLwh() ? "Customer counts" : "You count") : "LWH counts");
 
@@ -69,7 +72,7 @@
                 ${c.status === "review" && isLwh() ? `<span><strong>${plural(st.unresolved || 0, "variance")} to resolve</strong></span>` : ""}</div>`;
       }
       return `<button class="cc-card st-${c.status}" data-id="${c.id}">
-        <div>${pill(c.status, c.overdue)} <span class="pill">${esc(performerText(c))}</span>${c.source === "schedule" ? ' <span class="pill">Scheduled</span>' : ""}</div>
+        <div>${pill(c.status, c.overdue)} <span class="pill">${esc(performerText(c))}</span>${c.source === "schedule" ? ' <span class="pill">Scheduled</span>' : ""}${qtyMode(c) ? ' <span class="pill">With quantities</span>' : ""}</div>
         <h3>#${c.id} &middot; ${esc(c.title)}</h3>
         ${body}
         <div class="cc-meta"><span>Requested by ${esc(c.requested_by)} ${fmtStamp(c.requested_at)}</span>${c.due_date ? `<span>Due ${fmtDate(c.due_date)}</span>` : ""}</div>
@@ -161,6 +164,9 @@
           <label class="choice"><input type="radio" name="ccWho" value="customer"> ${lwh ? "The customer counts it" : "We will count it ourselves"}</label>
         </div>
         <p class="hint">${lwh ? "" : "LWH reviews every count before results are final."}</p></div>
+      <div class="field"><label class="inline" style="font-weight:600"><input type="checkbox" id="ccQtyMode"> Also record the quantity on each pallet</label>
+        <p class="hint">Leave this off for a pallet check: scan each pallet and the app shows what is found, in the wrong bay, or missing.
+          Turn it on only when quantities matter; counting takes longer.</p></div>
       <div class="field"><label for="ccDue">Needed by</label><input type="date" id="ccDue" value="${A.isoLocal(due)}"></div>
       <div class="field"><label for="ccTitle">Name (optional)</label><input type="text" id="ccTitle" maxlength="80" placeholder="Example: Month-end check on engines"></div>
       <div class="field"><label for="ccNotes">Notes for LWH (optional)</label><textarea id="ccNotes" maxlength="500"></textarea></div>
@@ -194,7 +200,8 @@
       if (type !== "all" && !values.length) { $("ccErr").textContent = "Add at least one entry to count."; return; }
       if (values.length > 500) { $("ccErr").textContent = "That is more than 500 entries. Split it into smaller counts."; return; }
       const payload = { scope_type: type, performer: document.querySelector('input[name="ccWho"]:checked').value,
-        due_date: $("ccDue").value, title: $("ccTitle").value.trim(), notes: $("ccNotes").value.trim() };
+        due_date: $("ccDue").value, title: $("ccTitle").value.trim(), notes: $("ccNotes").value.trim(),
+        count_qty: $("ccQtyMode").checked };
       payload[type] = values;
       busy(true, "Sending request");
       try {
@@ -233,7 +240,8 @@
       <div><button class="back" id="ccBack">&larr; All counts</button>
         <h2>#${c.id} &middot; ${esc(c.title)}</h2>
         <div>${pill(c.status, c.due_date && c.due_date < A.isoLocal(new Date()) && ["requested", "in_progress"].includes(c.status))}
-          <span class="pill">${esc(performerText(c))}</span>${c.source === "schedule" ? ' <span class="pill">Scheduled</span>' : ""}</div>
+          <span class="pill">${esc(performerText(c))}</span>${c.source === "schedule" ? ' <span class="pill">Scheduled</span>' : ""}
+          <span class="pill">${qtyMode(c) ? "With quantities" : "Pallet check"}</span></div>
         <div class="cc-meta" style="margin-top:6px"><span>${esc(scopeText(c))}</span></div>
         <div class="cc-meta"><span>Requested by ${esc(c.requested_by)} ${fmtStamp(c.requested_at)}</span>
           ${c.due_date ? `<span>Due ${fmtDate(c.due_date)}</span>` : ""}
@@ -270,6 +278,14 @@
   }
 
   function statTiles(st) {
+    if (!qtyMode(CS.detail.count)) return `<div class="stats">
+      <div class="stat ${st.pallet_accuracy >= 98 ? "good" : st.pallet_accuracy < 95 ? "bad" : ""}"><span class="num">${pct(st.pallet_accuracy)}</span><span class="lbl">Accuracy</span></div>
+      <div class="stat"><span class="num">${num(st.expected_pallets)}</span><span class="lbl">Pallets expected</span></div>
+      <div class="stat good"><span class="num">${num(st.match)}</span><span class="lbl">Found in place</span></div>
+      <div class="stat ${st.wrong_bay ? "bad" : ""}"><span class="num">${num(st.wrong_bay)}</span><span class="lbl">Wrong bay</span></div>
+      <div class="stat ${st.missing ? "bad" : ""}"><span class="num">${num(st.missing)}</span><span class="lbl">Missing</span></div>
+      <div class="stat ${st.extra + st.unknown ? "bad" : ""}"><span class="num">${num((st.extra || 0) + (st.unknown || 0))}</span><span class="lbl">Found, not on list</span></div>
+    </div>`;
     return `<div class="stats">
       <div class="stat ${st.pallet_accuracy >= 98 ? "good" : st.pallet_accuracy < 95 ? "bad" : ""}"><span class="num">${pct(st.pallet_accuracy)}</span><span class="lbl">Pallet accuracy</span></div>
       <div class="stat ${st.qty_accuracy >= 99 ? "good" : st.qty_accuracy < 97 ? "bad" : ""}"><span class="num">${pct(st.qty_accuracy)}</span><span class="lbl">Quantity accuracy</span></div>
@@ -312,7 +328,8 @@
     if (CS.bay) return top + bayView();
     const bays = bayGroups();
     return top + `<h3 style="margin:16px 0 4px">Pick a bay to count</h3>
-      <p class="muted">Counts are blind: scan each pallet and enter what you see. You will not see the expected quantity.</p>
+      <p class="muted">${qtyMode(CS.detail.count) ? "Scan each pallet and enter the quantity you see. Counts are blind: you will not see the expected quantity."
+        : "Scan every pallet in the bay. Each scan saves right away."}</p>
       <div class="bay-grid">${bays.map((b) => `<button class="bay-btn ${b.done ? "done" : b.counted || b.extra ? "started" : ""}" data-bay="${esc(b.bay)}">
           <strong>${esc(b.bay)}</strong><small>${b.done ? "Finished" : `${num(b.counted)} of ${num(b.total)}`}${b.extra ? ` &middot; +${b.extra} extra` : ""}</small></button>`).join("")}</div>
       <div class="other-bay"><span>Scan a bay label, or type a bay not listed:</span><input id="ccOtherBay" type="text" maxlength="30" placeholder="Scan or type bay"><button class="btn" id="ccOtherGo">Go</button></div>
@@ -323,10 +340,11 @@
     const bay = CS.bay, lines = CS.detail.lines;
     const here = lines.filter((l) => (l.expected && (l.bay || "").toUpperCase() === bay) || (l.counted_bay || "").toUpperCase() === bay);
     const done = CS.detail.bays_done.includes(bay);
+    const qm = qtyMode(CS.detail.count);
     const cam = "BarcodeDetector" in window ? '<button class="btn cam-btn" id="ccCam" type="button">Camera</button>' : "";
     const rows = here.map((l) => {
       const elsewhere = l.expected && l.counted_bay && l.counted_bay.toUpperCase() !== bay && (l.bay || "").toUpperCase() === bay;
-      const counted = l.counted_qty === null || l.counted_qty === undefined || l.result === "missing" ? "" : ` &middot; qty ${num(l.counted_qty)}`;
+      const counted = !qm || l.counted_qty === null || l.counted_qty === undefined || l.result === "missing" ? "" : ` &middot; qty ${num(l.counted_qty)}`;
       return `<tr>
         <td class="wrap-id"><button class="btn link" data-fill="${esc(l.lwh_id || l.tag || "")}" title="Put this tag in the scan box">${esc(l.lwh_id || l.tag || "")}</button>
           ${l.customer_id ? `<small>${esc(l.customer_id)}</small>` : ""}</td>
@@ -338,13 +356,13 @@
     return `<div class="scan">
         <button class="back" id="ccBays">&larr; All bays</button>
         <h3>Bay ${esc(bay)}${done ? ' <span class="pill closed">Finished</span>' : ""}</h3>
-        <div class="scan-row">
-          <div><label for="ccTag">Scan or type the tag (LWH ID or Customer ID)</label><input id="ccTag" autocomplete="off" autocapitalize="characters" enterkeyhint="next"></div>
-          <div><label for="ccQty">Quantity</label><input id="ccQty" type="number" inputmode="decimal" min="0" step="any" enterkeyhint="done"></div>
+        <div class="scan-row ${qm ? "" : "no-qty"}">
+          <div><label for="ccTag">Scan or type the tag (LWH ID${A.S.dash.has_customer_ids === false ? "" : " or Customer ID"})</label><input id="ccTag" autocomplete="off" autocapitalize="characters" enterkeyhint="${qm ? "next" : "done"}"></div>
+          ${qm ? '<div><label for="ccQty">Quantity</label><input id="ccQty" type="number" inputmode="decimal" min="0" step="any" enterkeyhint="done"></div>' : ""}
           <button class="btn primary" id="ccSave">Save</button>
         </div>
         <div class="other-bay scan-note"><input id="ccNote" type="text" maxlength="300" placeholder="Note (optional): damaged, label missing..." style="flex:1;width:auto;text-transform:none">
-          <label class="inline" style="font-weight:500"><input type="checkbox" id="ccKeep" ${CS.keepQty ? "checked" : ""}> Keep quantity for next pallet</label>${cam}</div>
+          ${qm ? `<label class="inline" style="font-weight:500"><input type="checkbox" id="ccKeep" ${CS.keepQty ? "checked" : ""}> Keep quantity for next pallet</label>` : ""}${cam}</div>
         <div id="camBox" hidden><video id="camVideo" playsinline muted></video></div>
         <div id="ccFeedback" class="feedback" hidden></div>
       </div>
@@ -367,21 +385,23 @@
   }
 
   async function saveScan() {
-    const tag = $("ccTag").value.trim(), qty = $("ccQty").value.trim();
+    const qm = qtyMode(CS.detail.count);
+    const tag = $("ccTag").value.trim(), qty = qm ? $("ccQty").value.trim() : null;
     const fb = $("ccFeedback");
     if (!tag) { $("ccTag").focus(); return; }
     if (switchBayFromScan(tag)) return;
-    if (qty === "") { $("ccQty").focus(); fb.hidden = false; fb.className = "feedback err"; fb.textContent = "Enter the quantity on the pallet."; return; }
+    if (qm && qty === "") { $("ccQty").focus(); fb.hidden = false; fb.className = "feedback err"; fb.textContent = "Enter the quantity on the pallet."; return; }
     $("ccSave").disabled = true;
     try {
       const r = await api("cc_scan", { id: CS.detail.count.id, bay: CS.bay, tag, qty, note: $("ccNote").value.trim() });
-      const keep = $("ccKeep").checked ? qty : "";
+      const keep = qm && $("ccKeep").checked ? qty : "";
       CS.detail = await api("cc_get", { id: CS.detail.count.id });
       renderDetail();
       const f = $("ccFeedback"); f.hidden = false;
       f.className = "feedback " + (["extra", "unknown", "wrong_bay"].includes(r.result) ? "warn" : "ok");
       f.textContent = `${r.tag}${r.item_number ? " (" + r.item_number + ")" : ""}: ${r.message}`;
-      $("ccQty").value = keep; $("ccTag").focus();
+      if (qm) $("ccQty").value = keep;
+      $("ccTag").focus();
       if (navigator.vibrate) navigator.vibrate(["extra", "unknown", "wrong_bay"].includes(r.result) ? [80, 60, 80] : 40);
     } catch (e) {
       if (e.message === "SESSION_EXPIRED") return;
@@ -401,7 +421,12 @@
         if (!CS.cam || !CS.cam.on) return;
         try {
           const codes = await det.detect(v);
-          if (codes.length) { $("ccTag").value = codes[0].rawValue; stopCam(); $("ccQty").focus(); if (navigator.vibrate) navigator.vibrate(40); return; }
+          if (codes.length) {
+            $("ccTag").value = codes[0].rawValue; stopCam(); if (navigator.vibrate) navigator.vibrate(40);
+            if (switchBayFromScan(codes[0].rawValue)) return;
+            if (qtyMode(CS.detail.count)) $("ccQty").focus(); else saveScan();
+            return;
+          }
         } catch { /* keep trying */ }
         setTimeout(loop, 250);
       };
@@ -417,7 +442,8 @@
   function varianceRows(editable) {
     let lines = CS.detail.lines;
     if (CS.filter === "var") lines = lines.filter((l) => !["match", "pending"].includes(l.result));
-    if (!lines.length) return `<tr><td class="empty" colspan="12">${CS.filter === "var" ? "No variances. Every pallet matched." : "No lines."}</td></tr>`;
+    if (!lines.length) return `<tr><td class="empty" colspan="12">${CS.filter === "var" ? "No variances. Every pallet was found where it belongs." : "No lines."}</td></tr>`;
+    const qm = qtyMode(CS.detail.count);
     return lines.map((l) => {
       const diff = (l.counted_qty ?? 0) - (l.expected ? (l.expected_qty ?? 0) : 0);
       const isVar = !["match", "pending"].includes(l.result);
@@ -426,8 +452,8 @@
         <td>${esc(l.bay || "")}</td><td>${esc(l.counted_bay || "")}</td>
         <td>${esc(l.lwh_id || l.tag || "")}</td><td>${esc(l.customer_id || "")}</td>
         <td>${esc(l.item_number || "")}</td>
-        <td class="r">${l.expected ? num(l.expected_qty) : ""}</td><td class="r">${num(l.counted_qty)}</td>
-        <td class="r ${diff > 0 ? "diff-pos" : diff < 0 ? "diff-neg" : ""}">${diff ? (diff > 0 ? "+" : "") + num(diff) : ""}</td>
+        ${qm ? `<td class="r">${l.expected ? num(l.expected_qty) : ""}</td><td class="r">${num(l.counted_qty)}</td>
+        <td class="r ${diff > 0 ? "diff-pos" : diff < 0 ? "diff-neg" : ""}">${diff ? (diff > 0 ? "+" : "") + num(diff) : ""}</td>` : ""}
         <td>${res(l.result)}${l.note ? `<div class="muted" style="font-size:14px;white-space:normal">${esc(l.note)}</div>` : ""}</td>
         <td>${l.counted_by ? esc(l.counted_by) : ""}</td>
         <td class="res-cell">${editable && isVar
@@ -438,7 +464,7 @@
     }).join("");
   }
   const VAR_HEAD = (editable) => `<tr>${editable ? "<th></th>" : ""}<th>WMS bay</th><th>Found in</th><th>LWH ID</th><th>Customer ID</th><th>Item #</th>
-      <th class="r">Expected</th><th class="r">Counted</th><th class="r">Diff</th><th>Result</th><th>Counted by</th><th>Resolution</th></tr>`;
+      ${qtyMode(CS.detail.count) ? '<th class="r">Expected</th><th class="r">Counted</th><th class="r">Diff</th>' : ""}<th>Result</th><th>Counted by</th><th>Resolution</th></tr>`;
   const filterSeg = () => `<div class="seg" id="ccFilter" style="margin:6px 0 10px">
       <button class="seg-btn ${CS.filter === "var" ? "active" : ""}" data-f="var">Variances</button>
       <button class="seg-btn ${CS.filter === "all" ? "active" : ""}" data-f="all">All lines</button></div>`;
@@ -467,16 +493,19 @@
   function exportCount() {
     if (!A.xlsxReady()) return;
     const d = CS.detail, c = d.count, st = d.stats;
+    const qm = qtyMode(c);
     const cols = [["bay", "WMS Bay"], ["counted_bay", "Found In"], ["lwh_id", "LWH ID"], ["customer_id", "Customer ID"], ["tag", "Scanned Tag"],
       ["item_number", "Item #"], ["item_description", "Item Description"], ["expected_qty", "Expected Qty"], ["counted_qty", "Counted Qty"],
-      ["diff", "Diff"], ["result_label", "Result"], ["note", "Counter Note"], ["counted_by", "Counted By"], ["resolution", "Resolution"], ["wms", "WMS Adjusted"]];
+      ["diff", "Diff"], ["result_label", "Result"], ["note", "Counter Note"], ["counted_by", "Counted By"], ["resolution", "Resolution"], ["wms", "WMS Adjusted"]]
+      .filter(([k]) => qm || !["expected_qty", "counted_qty", "diff"].includes(k));
     const rows = d.lines.map((l) => ({ ...l, diff: (l.counted_qty ?? 0) - (l.expected ? (l.expected_qty ?? 0) : 0),
-      result_label: RESULT[l.result] || l.result, wms: l.wms_adjusted ? "Yes" : "" }));
+      result_label: resLabel(l.result, c), wms: l.wms_adjusted ? "Yes" : "" }));
     const sum = [["Count", `#${c.id} ${c.title}`], ["Status", STATUS[c.status]], ["Scope", scopeText(c, 50)],
       ["Requested", `${c.requested_by} ${fmtStamp(c.requested_at)}`], ["Closed", c.closed_at ? `${c.closed_by} ${fmtStamp(c.closed_at)}` : ""],
-      ["Pallet accuracy", pct(st.pallet_accuracy)], ["Quantity accuracy", pct(st.qty_accuracy)], ["Pallets expected", st.expected_pallets],
-      ["Matched", st.match], ["Qty off", st.qty_diff], ["Wrong bay", st.wrong_bay], ["Missing", st.missing],
-      ["Found, not on list", (st.extra || 0) + (st.unknown || 0)], ["Net qty difference", st.net_qty_diff]];
+      ["Type", qm ? "With quantities" : "Pallet check"],
+      ["Pallet accuracy", pct(st.pallet_accuracy)], ...(qm ? [["Quantity accuracy", pct(st.qty_accuracy)]] : []), ["Pallets expected", st.expected_pallets],
+      [qm ? "Matched" : "Found in place", st.match], ...(qm ? [["Qty off", st.qty_diff]] : []), ["Wrong bay", st.wrong_bay], ["Missing", st.missing],
+      ["Found, not on list", (st.extra || 0) + (st.unknown || 0)], ...(qm ? [["Net qty difference", st.net_qty_diff]] : [])];
     const wb = XLSX.utils.book_new();
     const ws0 = XLSX.utils.aoa_to_sheet(sum); ws0["!cols"] = [{ wch: 22 }, { wch: 60 }];
     XLSX.utils.book_append_sheet(wb, ws0, "Summary");
@@ -522,13 +551,18 @@
         if (e.key !== "Enter") return;
         e.preventDefault();
         if (switchBayFromScan(tag.value)) return;
+        if (!qtyMode(CS.detail.count)) return saveScan();
         if ($("ccQty").value.trim() !== "" && $("ccKeep").checked) saveScan(); else $("ccQty").focus();
       };
-      $("ccQty").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); saveScan(); } };
-      $("ccKeep").onchange = () => (CS.keepQty = $("ccKeep").checked);
+      if (qtyMode(CS.detail.count)) {
+        $("ccQty").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); saveScan(); } };
+        $("ccKeep").onchange = () => (CS.keepQty = $("ccKeep").checked);
+      }
       setTimeout(() => tag.focus(), 30);
     }
-    document.querySelectorAll("[data-fill]").forEach((b) => (b.onclick = () => { $("ccTag").value = b.dataset.fill; $("ccQty").focus(); }));
+    document.querySelectorAll("[data-fill]").forEach((b) => (b.onclick = () => {
+      $("ccTag").value = b.dataset.fill; (document.getElementById("ccQty") || $("ccTag")).focus();
+    }));
     document.querySelectorAll("[data-undo]").forEach((b) => (b.onclick = async () => {
       try { await api("cc_undo", { id, line_id: +b.dataset.undo }); await refresh(); toast("Scan undone."); } catch (e) { fail(e); }
     }));
@@ -579,7 +613,7 @@
           : s.scope_type === "top_items" ? `top ${s.scope.top} items by pallets`
           : s.scope_type === "all" ? "everything on hand"
           : `${plural((s.scope[s.scope_type] || []).length, s.scope_type === "items" ? "item" : "bay")}`;
-        return `${when} &middot; ${esc(what)}`;
+        return `${when} &middot; ${esc(what)} &middot; ${s.scope.count_qty ? "with quantities" : "pallet check"}`;
       };
       $("ccSchedules").innerHTML = (isLwh() ? '<button class="btn primary" id="ccAddSched" style="margin-bottom:12px">Add a schedule</button>' : "") +
         `<div class="cc-list">${list.map((s) => `<div class="cc-card ${s.active ? "st-in_progress" : ""}" style="cursor:default">
@@ -620,6 +654,7 @@
         <p class="hint" id="sRotHint"></p></div>
       <div class="field" id="sTopF"><label for="sTop">How many items</label><input type="number" id="sTop" min="1" max="500" value="${(s.scope && s.scope.top) || 25}"></div>
       <div class="field" id="sListF"><span class="lab" id="sListLab"></span><div id="sList"></div></div>
+      <div class="field"><label class="inline"><input type="checkbox" id="sQty" ${s.scope && s.scope.count_qty ? "checked" : ""}> Also record quantities (off = pallet check)</label></div>
       <div class="field"><label for="sLead">Due this many days after it is created</label><input type="number" id="sLead" min="0" max="31" value="${s.lead_days ?? 3}"></div>
       <div class="field"><label for="sStart">First run on or after</label><input type="date" id="sStart" value="${esc(s.start_date || "2027-01-01")}"></div>
       <div class="field"><label class="inline"><input type="checkbox" id="sActive" ${s.active !== false ? "checked" : ""}> Active</label></div>
@@ -644,7 +679,7 @@
       const t = $("sType").value;
       const p = { id: s.id || null, name: $("sName").value.trim(), frequency: document.querySelector('input[name="sFreq"]:checked').value,
         weekday: +$("sWd").value, month_day: +$("sMd").value, scope_type: t, cycle_runs: +$("sRot").value, top: +$("sTop").value,
-        lead_days: +$("sLead").value, start_date: $("sStart").value, active: $("sActive").checked };
+        lead_days: +$("sLead").value, start_date: $("sStart").value, active: $("sActive").checked, count_qty: $("sQty").checked };
       if (t === "items" || t === "bays") p[t] = editor ? editor.values() : [];
       try { const r = await api("cc_schedule_save", { schedule: p }); closeModal(); toast(`Schedule saved. Next run ${fmtDate(r.next_run_on)}.`); loadSchedules(); }
       catch (e) { if (e.message !== "SESSION_EXPIRED") $("sErr").textContent = e.message; }

@@ -11,6 +11,13 @@ One Source and Trane apps, with the time, temperature and today's forecast in th
 - **Transactions**: loads and pallets in/out, by-shipper rollup, up to 92 days (same as Trane).
 - **Cycle Counts**: request, count, review and results, plus weekly/monthly schedules.
 
+## Pallet check vs. quantity count
+Every count is a **pallet check** unless "Also record the quantity on each pallet" is ticked on the request or schedule.
+A pallet check is the fast way: pick the bay, scan every pallet, and each scan saves on its own (no quantity box).
+Results show **Found in place, Wrong bay, Missing, Found not on list** and an accuracy %. A found pallet is recorded at its
+WMS quantity, so quantities never show as off. Tick the box when quantities matter: counters then enter what they see (blind)
+and results add quantity accuracy and differences. Printed count sheets follow the same choice (a Found box vs. a qty box).
+
 ## Barcode sheets (print or Save as PDF)
 All barcodes are Code 128 and print from the browser's print dialog. Choose "Save as PDF" to keep a file.
 | Where | Button | Sheet |

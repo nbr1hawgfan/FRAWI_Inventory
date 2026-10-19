@@ -381,3 +381,7 @@ td label.adj{display:inline-flex;align-items:center;gap:4px;font-size:14px;margi
 .ps-label .bc{width:80%;height:1.4in}
 .ps-label-sub{font-size:11pt;color:#333}
 .bc-err{font-size:9pt;color:#9E0E27}
+.scan-row.no-qty{grid-template-columns:1fr auto}
+.ps-check{width:60px;text-align:center}
+.ps-check span{display:inline-block;width:26px;height:26px;border:2px solid #000}
+@media (max-width:760px){.scan-row.no-qty{grid-template-columns:1fr}}
